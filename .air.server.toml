@@ -1,0 +1,14 @@
+root = "."
+tmp_dir = "tmp/server"
+
+[build]
+  cmd = "go build -o ./tmp/server/main ./cmd/server/main.go"
+  bin = "./tmp/server/main"
+  delay = 1000
+  include_ext = ["go", "mod"]
+  exclude_dir = ["tmp"]
+  poll = true
+  poll_interval = 500
+  send_interrupt = true   # SIGINT the old process first (graceful) before killing
+  kill_delay = "1s"       # wait 1s for it to release :8080 before relaunching
+  stop_on_error = true    # on a failed build, stop the app instead of serving stale code
