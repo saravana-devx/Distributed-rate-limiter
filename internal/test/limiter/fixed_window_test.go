@@ -20,7 +20,7 @@ func TestFixedWindow(t *testing.T) {
 	defer rdb.Client.Del(ctx, key)
 
 	// first request should be allowed
-	res, err := limiter.FixedWindow(ctx, rdb, key, 5, 10)
+	res, err := limiter.FixedWindow(ctx, rdb, key, 3, 60)
 	if err != nil {
 		t.Fatalf("FixedWindow returned an error: %v", err)
 	}
@@ -29,8 +29,8 @@ func TestFixedWindow(t *testing.T) {
 		t.Errorf("Expected Allowed, but got rejected")
 	}
 
-	if res.Remaining != 4 {
-		t.Errorf("expected remaining 4, got %d", res.Remaining)
+	if res.Remaining != 2 {
+		t.Errorf("expected remaining 2, got %d", res.Remaining)
 	}
 
 	// second request should be allowed
