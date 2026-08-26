@@ -7,8 +7,6 @@ import (
 	"github.com/spf13/viper"
 )
 
-// Config holds every environment variable the app reads. It is the single
-// source of truth — no other package should call viper directly.
 type Config struct {
 	// Postgres
 	PostgresHost     string

@@ -76,6 +76,8 @@ services:
     command: air -c .air.server.toml
     environment:
       <<: *app-env
+      POSTGRES_HOST: postgres
+      REDIS_ADDR: redis:6379
       GO_ENV: development
 
 volumes:

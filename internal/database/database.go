@@ -10,14 +10,13 @@ import (
 	"ratelimiter/internal/config"
 )
 
-func ConnectDB() (*gorm.DB, error) {
-	c := config.Get()
+func ConnectDB(cfg *config.Config) (*gorm.DB, error) {
 	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
-		c.PostgresUser,
-		c.PostgresPassword,
-		c.PostgresHost,
-		c.PostgresPort,
-		c.PostgresDB,
+		cfg.PostgresUser,
+		cfg.PostgresPassword,
+		cfg.PostgresHost,
+		cfg.PostgresPort,
+		cfg.PostgresDB,
 	)
 
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
@@ -27,14 +26,14 @@ func ConnectDB() (*gorm.DB, error) {
 
 	sqlDB, err := db.DB()
 	if err != nil {
-		fmt.Println("get sql db: %w", err)
+		return nil, fmt.Errorf("get sql db: %w", err)
 	}
 	sqlDB.SetMaxOpenConns(25)
-	sqlDB.SetMaxIdleConns(25)
+	sqlDB.SetMaxIdleConns(10)
 	sqlDB.SetConnMaxLifetime(5 * time.Minute)
 
-	if err = sqlDB.Ping(); err != nil {
-		fmt.Println("postgres ping : %w", err)
+	if err := sqlDB.Ping(); err != nil {
+		return nil, fmt.Errorf("postgres ping: %w", err)
 	}
 
 	fmt.Println("Database connected successfully...")
