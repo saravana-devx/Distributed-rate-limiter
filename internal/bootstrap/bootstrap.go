@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 
+	"ratelimiter/internal/check"
 	"ratelimiter/internal/client"
 	"ratelimiter/internal/config"
 	"ratelimiter/internal/database"
@@ -33,16 +34,20 @@ func New(cfg *config.Config) (*App, error) {
 		return nil, fmt.Errorf("unable to connect to redis: %w", err)
 	}
 
+	healthHandler := health.NewHealthHandler(db, rdb)
+
 	clientRepo := client.NewRepository(db)
 	clientService := client.NewService(clientRepo, rdb)
 	clientHandler := client.NewClientHandler(clientService)
-	healthHandler := health.NewHealthHandler(db, rdb)
+
+	checkService := check.NewService(rdb)
+	checkHandler := check.NewHandler(checkService)
 
 	router := gin.Default()
 	if err := router.SetTrustedProxies(nil); err != nil {
 		return nil, err
 	}
-	routes.Register(router, healthHandler, clientHandler, clientService)
+	routes.Register(router, healthHandler, clientHandler, clientService, checkHandler)
 
 	return &App{router: router, DB: db, Redis: rdb}, nil
 }
