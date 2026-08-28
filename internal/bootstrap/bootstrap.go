@@ -5,9 +5,12 @@ import (
 	"fmt"
 	"log"
 
+	"ratelimiter/internal/client"
 	"ratelimiter/internal/config"
 	"ratelimiter/internal/database"
+	"ratelimiter/internal/health"
 	"ratelimiter/internal/redis"
+	"ratelimiter/internal/routes"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -30,10 +33,17 @@ func New(cfg *config.Config) (*App, error) {
 		return nil, fmt.Errorf("unable to connect to redis: %w", err)
 	}
 
+	clientRepo := client.NewRepository(db)
+	clientService := client.NewService(clientRepo)
+	clientHandler := client.NewClientHandler(clientService)
+	healthHandler := health.NewHealthHandler(db, rdb)
+
 	router := gin.Default()
 	if err := router.SetTrustedProxies(nil); err != nil {
 		return nil, err
 	}
+	routes.Register(router, healthHandler, clientHandler, clientService)
+
 	return &App{router: router, DB: db, Redis: rdb}, nil
 }
 

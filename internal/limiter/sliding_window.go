@@ -11,14 +11,18 @@ var slidingWindowScript = redis.NewScript(`
 	local limit = tonumber(ARGV[1])
 	local windowSize = tonumber(ARGV[2])
 
-	local now = tonumber(redis.call("TIME")[1])
+	local time = redis.call("TIME")
+	local now = tonumber(time[1])
 	local windowStart = now - windowSize
 
 	-- remove all entries outside the window
 	redis.call("ZREMRANGEBYSCORE", key, "-inf", windowStart)
 
-	-- add current request timestamps
-	redis.call("ZADD", key, now, now)
+	-- add current request timestamp; member must be unique per request so that
+	-- multiple requests within the same second don't collide and overwrite
+	-- each other's sorted-set entry (which would keep ZCARD from increasing)
+	local member = now .. "-" .. time[2] .. "-" .. math.random()
+	redis.call("ZADD", key, now, member)
 	-- count how many requests are in the window
 
 	-- auto cleanup so key doesn't resides in redis forever
