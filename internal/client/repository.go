@@ -2,8 +2,13 @@ package client
 
 import (
 	"context"
+	"errors"
+
+	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 )
+
+const pgUniqueViolationCode = "23505"
 
 type Repository struct {
 	db *gorm.DB
@@ -14,8 +19,14 @@ func NewRepository(db *gorm.DB) *Repository {
 }
 
 func (c *Repository) CreateClient(ctx context.Context, client *Client) error {
-	return c.db.WithContext(ctx).Create(client).Error
-
+	if err := c.db.WithContext(ctx).Create(client).Error; err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == pgUniqueViolationCode {
+			return ErrClientAlreadyExists
+		}
+		return err
+	}
+	return nil
 }
 
 func (c *Repository) GetClientByID(ctx context.Context, clientID string) (*Client, error) {

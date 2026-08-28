@@ -2,8 +2,11 @@ package redis
 
 import (
 	"context"
-	"github.com/redis/go-redis/v9"
+	"encoding/json"
 	"sync"
+	"time"
+
+	"github.com/redis/go-redis/v9"
 )
 
 type Redis struct {
@@ -32,6 +35,28 @@ func NewRedis(redisAddr string, redisPassword string) *Redis {
 
 func (r *Redis) Ping(ctx context.Context) error {
 	return r.Client.Ping(ctx).Err()
+}
+
+// Set JSON-encodes value and stores it under key. ttl of 0 means no expiry.
+func (r *Redis) Set(ctx context.Context, key string, value interface{}, ttl time.Duration) error {
+	data, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	return r.Client.Set(ctx, key, data, ttl).Err()
+}
+
+func (r *Redis) Get(ctx context.Context, key string, dest interface{}) error {
+	data, err := r.Client.Get(ctx, key).Bytes()
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(data, dest)
+}
+
+// Del removes key. Not an error if key doesn't exist.
+func (r *Redis) Del(ctx context.Context, key string) error {
+	return r.Client.Del(ctx, key).Err()
 }
 
 // script.Run()  →  sends Lua to Redis, returns *redis.Cmd

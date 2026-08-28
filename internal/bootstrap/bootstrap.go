@@ -34,7 +34,7 @@ func New(cfg *config.Config) (*App, error) {
 	}
 
 	clientRepo := client.NewRepository(db)
-	clientService := client.NewService(clientRepo)
+	clientService := client.NewService(clientRepo, rdb)
 	clientHandler := client.NewClientHandler(clientService)
 	healthHandler := health.NewHealthHandler(db, rdb)
 
