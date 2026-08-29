@@ -2,20 +2,22 @@ package test
 
 import (
 	"context"
-	"ratelimiter/internal/limiter"
-	redisClient "ratelimiter/internal/redis"
 	"testing"
+
+	limiter "ratelimiter/internal/limiter"
+	redisClient "ratelimiter/internal/redis"
 )
 
 func TestTokenBucket(t *testing.T) {
 	rdb := redisClient.NewRedis("localhost:6379", "ratelimiter")
+	tb := limiter.NewTokenBucket(rdb)
 	ctx := context.Background()
-	key := "test:sliding_window"
+	key := "test:token_bucket"
 
 	rdb.Client.Del(ctx, key)
 	defer rdb.Client.Del(ctx, key)
 
-	res, err := limiter.TokenBucket(ctx, rdb, key, 3, 60)
+	res, err := tb.Allow(ctx, key, 3, 60)
 	if err != nil {
 		t.Fatalf("Token Bucket returned an error : %v", err)
 	}
@@ -26,7 +28,7 @@ func TestTokenBucket(t *testing.T) {
 		t.Errorf("excepted remaining 2, got %d", res.Remaining)
 	}
 
-	res2, err := limiter.TokenBucket(ctx, rdb, key, 3, 60)
+	res2, err := tb.Allow(ctx, key, 3, 60)
 	if err != nil {
 		t.Fatalf("Unexcepted error : %v", err)
 	}
@@ -37,7 +39,7 @@ func TestTokenBucket(t *testing.T) {
 		t.Errorf("excepted remaining 1, got %d", res2.Remaining)
 	}
 
-	res3, err := limiter.TokenBucket(ctx, rdb, key, 3, 60)
+	res3, err := tb.Allow(ctx, key, 3, 60)
 	if err != nil {
 		t.Fatalf("Unexcepted error : %v", err)
 	}
@@ -48,7 +50,7 @@ func TestTokenBucket(t *testing.T) {
 		t.Errorf("excepted remaining 0, got %d", res3.Remaining)
 	}
 
-	res4, err := limiter.TokenBucket(ctx, rdb, key, 3, 60)
+	res4, err := tb.Allow(ctx, key, 3, 60)
 	if err != nil {
 		t.Fatalf("Unexcepted error : %v", err)
 	}
@@ -57,5 +59,8 @@ func TestTokenBucket(t *testing.T) {
 	}
 	if res4.Remaining != 0 {
 		t.Errorf("excepted remaining 0, got %d", res4.Remaining)
+	}
+	if res4.ResetAt <= 0 {
+		t.Errorf("expected positive reset_at on rejection, got %d", res4.ResetAt)
 	}
 }

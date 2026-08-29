@@ -8,43 +8,34 @@ import (
 	"ratelimiter/internal/redis"
 )
 
-type CheckRepository interface {
-}
-
 type Service struct {
-	rdb *redis.Redis
+	rdb        *redis.Redis
+	strategies map[string]limiter.RateLimiter
 }
 
 func NewService(rdb *redis.Redis) *Service {
-	return &Service{rdb: rdb}
+	return &Service{
+		rdb: rdb,
+		strategies: map[string]limiter.RateLimiter{
+			"fixed_window":   limiter.NewFixedWindow(rdb),
+			"sliding_window": limiter.NewSlidingWindow(rdb),
+			"token_bucket":   limiter.NewTokenBucket(rdb),
+		},
+	}
 }
 
 func (s *Service) Check(ctx context.Context, cl *client.Client, req *CheckRequest) (*CheckResult, error) {
-
 	// Build redis key
 	key := fmt.Sprintf("limiter:%s:%s:%s", cl.Algorithm, cl.ClientID, req.Identifier)
 
-	// switch on Client Algorithm -> call right algorithm
-	switch cl.Algorithm {
-	case "token_bucket":
-		res, err := limiter.TokenBucket(ctx, s.rdb, key, cl.Limit, cl.WindowSeconds)
-		if err != nil {
-			return nil, err
-		}
-		return &CheckResult{Allowed: res.Allowed, Remaining: int(res.Remaining)}, nil
-	case "fixed_window":
-		res, err := limiter.FixedWindow(ctx, s.rdb, key, cl.Limit, cl.WindowSeconds)
-		if err != nil {
-			return nil, err
-		}
-		return &CheckResult{Allowed: res.Allowed, Remaining: int(res.Remaining)}, nil
-	case "sliding_window":
-		res, err := limiter.SlidingWindow(ctx, s.rdb, key, cl.Limit, cl.WindowSeconds)
-		if err != nil {
-			return nil, err
-		}
-		return &CheckResult{Allowed: res.Allowed, Remaining: int(res.Remaining)}, nil
-
+	strategy, ok := s.strategies[string(cl.Algorithm)]
+	if !ok {
+		return nil, fmt.Errorf("unknown algorithm: %s", cl.Algorithm)
 	}
-	return nil, fmt.Errorf("unknown algorithm: %s", cl.Algorithm)
+
+	res, err := strategy.Allow(ctx, key, cl.Limit, cl.WindowSeconds)
+	if err != nil {
+		return nil, err
+	}
+	return &CheckResult{Allowed: res.Allowed, Remaining: int(res.Remaining), ResetAt: res.ResetAt}, nil
 }

@@ -7,6 +7,7 @@ type CheckRequest struct {
 }
 
 type CheckResult struct {
-	Allowed   bool `json:"allowed"`
-	Remaining int  `json:"remaining"`
+	Allowed   bool  `json:"allowed"`
+	Remaining int   `json:"remaining"`
+	ResetAt   int64 `json:"reset_at"`
 }

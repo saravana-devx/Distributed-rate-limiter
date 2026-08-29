@@ -2,20 +2,22 @@ package test
 
 import (
 	"context"
-	"ratelimiter/internal/limiter"
-	redisClient "ratelimiter/internal/redis"
 	"testing"
+
+	limiter "ratelimiter/internal/limiter"
+	redisClient "ratelimiter/internal/redis"
 )
 
 func TestSlidingWindow(t *testing.T) {
 	rdb := redisClient.NewRedis("localhost:6379", "ratelimiter")
+	sw := limiter.NewSlidingWindow(rdb)
 	ctx := context.Background()
 	key := "test:sliding_window"
 
 	rdb.Client.Del(ctx, key)
 	defer rdb.Client.Del(ctx, key)
 
-	res, err := limiter.SlidingWindow(ctx, rdb, key, 3, 60)
+	res, err := sw.Allow(ctx, key, 3, 60)
 	if err != nil {
 		t.Fatalf("Sliding Window returned an error : %v", err)
 	}
@@ -28,7 +30,11 @@ func TestSlidingWindow(t *testing.T) {
 		t.Errorf("excepted remaining 2, got %d", res.Remaining)
 	}
 
-	res2, err := limiter.SlidingWindow(ctx, rdb, key, 3, 60)
+	if res.ResetAt <= 0 {
+		t.Errorf("expected positive reset_at, got %d", res.ResetAt)
+	}
+
+	res2, err := sw.Allow(ctx, key, 3, 60)
 	if err != nil {
 		t.Fatalf("Unexcepted error : %v", err)
 	}
@@ -41,7 +47,7 @@ func TestSlidingWindow(t *testing.T) {
 		t.Errorf("excepted remaining 1, got %d", res2.Remaining)
 	}
 
-	res3, err := limiter.SlidingWindow(ctx, rdb, key, 3, 60)
+	res3, err := sw.Allow(ctx, key, 3, 60)
 	if err != nil {
 		t.Fatalf("Unexcepted error : %v", err)
 	}
@@ -54,7 +60,7 @@ func TestSlidingWindow(t *testing.T) {
 		t.Errorf("excepted remaining 0, got %d", res3.Remaining)
 	}
 
-	res4, err := limiter.SlidingWindow(ctx, rdb, key, 3, 60)
+	res4, err := sw.Allow(ctx, key, 3, 60)
 	if err != nil {
 		t.Fatalf("Unexcepted error : %v", err)
 	}

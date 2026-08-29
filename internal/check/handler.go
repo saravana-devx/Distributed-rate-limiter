@@ -2,6 +2,7 @@ package check
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"ratelimiter/internal/client"
 	"ratelimiter/internal/httpx"
@@ -38,6 +39,7 @@ func (h *Handler) Check(c *gin.Context) {
 	}
 	// handle if allowed is false/true
 	if !data.Allowed {
+		c.Header("Retry-After", fmt.Sprintf("%d", data.ResetAt-time.Now().Unix()))
 		httpx.Success(c, http.StatusTooManyRequests, "rate limit exceeded", data)
 		return
 	}

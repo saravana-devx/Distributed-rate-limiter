@@ -12,6 +12,7 @@ import (
 // t.Fatalf → logs failure and stops test immediately
 func TestFixedWindow(t *testing.T) {
 	rdb := redisClient.NewRedis("localhost:6379", "ratelimiter")
+	fw := limiter.NewFixedWindow(rdb)
 	ctx := context.Background()
 	key := "test:fixed_window"
 
@@ -20,7 +21,7 @@ func TestFixedWindow(t *testing.T) {
 	defer rdb.Client.Del(ctx, key)
 
 	// first request should be allowed
-	res, err := limiter.FixedWindow(ctx, rdb, key, 3, 60)
+	res, err := fw.Allow(ctx, key, 3, 60)
 	if err != nil {
 		t.Fatalf("FixedWindow returned an error: %v", err)
 	}
@@ -33,8 +34,12 @@ func TestFixedWindow(t *testing.T) {
 		t.Errorf("expected remaining 2, got %d", res.Remaining)
 	}
 
+	if res.ResetAt <= 0 {
+		t.Errorf("expected positive reset_at, got %d", res.ResetAt)
+	}
+
 	// second request should be allowed
-	res2, err := limiter.FixedWindow(ctx, rdb, key, 3, 60)
+	res2, err := fw.Allow(ctx, key, 3, 60)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -46,7 +51,7 @@ func TestFixedWindow(t *testing.T) {
 	}
 
 	// third request should be allowed
-	res3, err := limiter.FixedWindow(ctx, rdb, key, 3, 60)
+	res3, err := fw.Allow(ctx, key, 3, 60)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -58,7 +63,7 @@ func TestFixedWindow(t *testing.T) {
 	}
 
 	// fourth request should be rejected — limit exceeded
-	res4, err := limiter.FixedWindow(ctx, rdb, key, 3, 60)
+	res4, err := fw.Allow(ctx, key, 3, 60)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
