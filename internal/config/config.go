@@ -18,6 +18,9 @@ type Config struct {
 	// Redis
 	RedisAddr     string
 	RedisPassword string
+
+	// Server
+	ServerPort string
 }
 
 var cfg *Config
@@ -43,10 +46,15 @@ func Load() error {
 		PostgresDB:       viper.GetString("POSTGRES_DB"),
 		RedisAddr:        viper.GetString("REDIS_ADDR"),
 		RedisPassword:    viper.GetString("REDIS_PASSWORD"),
+		ServerPort:       viper.GetString("SERVER_PORT"),
 	}
 
 	if c.RedisAddr == "" {
 		c.RedisAddr = "localhost:6379"
+	}
+
+	if c.ServerPort == "" {
+		c.ServerPort = "8080"
 	}
 
 	if err := c.validate(); err != nil {

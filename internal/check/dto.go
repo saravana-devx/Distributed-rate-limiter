@@ -1,9 +1,7 @@
 package check
 
-type algorithmType string
-
 type CheckRequest struct {
-	Identifier string `json:"identifier"`
+	Identifier string `json:"identifier" binding:"required"`
 }
 
 type CheckResult struct {

@@ -4,16 +4,21 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"reflect"
+	"strings"
 
 	"ratelimiter/internal/check"
 	"ratelimiter/internal/client"
 	"ratelimiter/internal/config"
 	"ratelimiter/internal/database"
 	"ratelimiter/internal/health"
+	"ratelimiter/internal/metrics"
 	"ratelimiter/internal/redis"
 	"ratelimiter/internal/routes"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
+	"github.com/go-playground/validator/v10"
 	"gorm.io/gorm"
 )
 
@@ -34,6 +39,8 @@ func New(cfg *config.Config) (*App, error) {
 		return nil, fmt.Errorf("unable to connect to redis: %w", err)
 	}
 
+	metrics.Init()
+
 	healthHandler := health.NewHealthHandler(db, rdb)
 
 	clientRepo := client.NewRepository(db)
@@ -46,6 +53,15 @@ func New(cfg *config.Config) (*App, error) {
 	router := gin.Default()
 	if err := router.SetTrustedProxies(nil); err != nil {
 		return nil, err
+	}
+	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
+		v.RegisterTagNameFunc(func(fld reflect.StructField) string {
+			name, _, _ := strings.Cut(fld.Tag.Get("json"), ",")
+			if name == "-" {
+				return ""
+			}
+			return name
+		})
 	}
 	routes.Register(router, healthHandler, clientHandler, clientService, checkHandler)
 

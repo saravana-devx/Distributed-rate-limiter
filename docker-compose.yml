@@ -6,6 +6,7 @@ x-app-env: &app-env
   POSTGRES_DB: ${POSTGRES_DB}
   REDIS_ADDR: ${REDIS_ADDR}
   REDIS_PASSWORD: ${REDIS_PASSWORD}
+  SERVER_PORT: ${SERVER_PORT}
 
 services:
   postgres:

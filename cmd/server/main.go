@@ -23,7 +23,7 @@ func main() {
 		log.Fatalf("Bootstrap failed : %v", err)
 	}
 	srv := &http.Server{
-		Addr:    ":8080",
+		Addr:    ":" + cfg.ServerPort,
 		Handler: app.Router(),
 	}
 

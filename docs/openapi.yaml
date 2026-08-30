@@ -1,0 +1,380 @@
+openapi: 3.0.3
+info:
+  title: Distributed Rate Limiter API
+  description: >
+    Rate-limit decision API backed by Redis, with per-client policy
+    management in PostgreSQL. Supports fixed window, sliding window, and
+    token bucket algorithms.
+  version: "1.0"
+servers:
+  - url: http://localhost:8080
+    description: Local (docker-compose / go run)
+
+tags:
+  - name: Health
+  - name: Clients
+  - name: Check
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Liveness/readiness check
+      description: Returns 200 if both PostgreSQL and Redis are reachable.
+      security: []
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessEnvelope"
+        "503":
+          description: Postgres or Redis unreachable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /metrics:
+    get:
+      tags: [Health]
+      summary: Prometheus scrape endpoint
+      description: >
+        Exposes `rate_limiter_requests_total` (counter) and
+        `rate_limiter_request_duration_seconds` (histogram), both labeled
+        by `method`, `path`, and `status`.
+      security: []
+      responses:
+        "200":
+          description: Metrics in Prometheus text exposition format
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /api/v1/clients:
+    post:
+      tags: [Clients]
+      summary: Create a client
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateClientRequest"
+      responses:
+        "201":
+          description: Client created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Client"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "409":
+          description: Client already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    get:
+      tags: [Clients]
+      summary: List all clients
+      security: []
+      responses:
+        "200":
+          description: List of clients
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Client"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/clients/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Client ID (the `clientId` used at creation, not the numeric primary key)
+        schema:
+          type: string
+    get:
+      tags: [Clients]
+      summary: Get a client by ID
+      security: []
+      responses:
+        "200":
+          description: Client found
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Client"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    put:
+      tags: [Clients]
+      summary: Update a client's policy
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateClientRequest"
+      responses:
+        "200":
+          description: Client updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Client"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      tags: [Clients]
+      summary: Delete a client
+      security: []
+      responses:
+        "200":
+          description: Client deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessEnvelope"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/check:
+    post:
+      tags: [Check]
+      summary: Check whether a request is allowed under the caller's rate-limit policy
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckRequest"
+      responses:
+        "200":
+          description: Request allowed
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/CheckResult"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          description: Missing or invalid X-API-Key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limit exceeded
+          headers:
+            Retry-After:
+              description: Seconds until the limit window resets
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/CheckResult"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key returned when the client was created.
+
+  responses:
+    ValidationError:
+      description: Request body failed validation
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ValidationErrorEnvelope"
+    NotFound:
+      description: Client not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    InternalError:
+      description: Unexpected server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+
+  schemas:
+    SuccessEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+        data:
+          nullable: true
+      required: [success, message]
+
+    ErrorEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+      required: [success, message]
+
+    FieldError:
+      type: object
+      properties:
+        field:
+          type: string
+        message:
+          type: string
+
+    ValidationErrorEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/ErrorEnvelope"
+        - type: object
+          properties:
+            errors:
+              type: array
+              items:
+                $ref: "#/components/schemas/FieldError"
+
+    Algorithm:
+      type: string
+      enum: [fixed_window, sliding_window, token_bucket]
+
+    Client:
+      type: object
+      properties:
+        ID:
+          type: integer
+        ClientID:
+          type: string
+          example: payments-service
+        Algorithm:
+          $ref: "#/components/schemas/Algorithm"
+        Limit:
+          type: integer
+          example: 100
+        WindowSeconds:
+          type: integer
+          example: 60
+        APIKey:
+          type: string
+          description: Generated on creation; used as the X-API-Key header for /check.
+        DeletedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    CreateClientRequest:
+      type: object
+      required: [clientId, algorithm, limit, window_seconds]
+      properties:
+        clientId:
+          type: string
+          example: payments-service
+        algorithm:
+          $ref: "#/components/schemas/Algorithm"
+        limit:
+          type: integer
+          minimum: 1
+          example: 100
+        window_seconds:
+          type: integer
+          minimum: 1
+          example: 60
+
+    UpdateClientRequest:
+      type: object
+      required: [algorithm, limit, window_seconds]
+      properties:
+        algorithm:
+          $ref: "#/components/schemas/Algorithm"
+        limit:
+          type: integer
+          minimum: 1
+        window_seconds:
+          type: integer
+          minimum: 1
+
+    CheckRequest:
+      type: object
+      required: [identifier]
+      properties:
+        identifier:
+          type: string
+          description: Scopes the limit within the client (e.g. per end-user, per IP).
+          example: user-123
+
+    CheckResult:
+      type: object
+      properties:
+        allowed:
+          type: boolean
+        remaining:
+          type: integer
+        reset_at:
+          type: integer
+          format: int64
+          description: Unix timestamp when the current window resets.

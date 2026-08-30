@@ -21,7 +21,7 @@ func NewClientHandler(svc *Service) *Handler {
 func (h *Handler) CreateClient(c *gin.Context) {
 	var body CreateClientRequest
 	if err := c.ShouldBindJSON(&body); err != nil {
-		httpx.Error(c, http.StatusBadRequest, httpx.MsgInvalidBody)
+		httpx.BindError(c, err)
 		return
 	}
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
@@ -46,7 +46,11 @@ func (h *Handler) GetClientByID(c *gin.Context) {
 
 	client, err := h.svc.GetClientByIDService(ctx, clientID)
 	if err != nil {
-		httpx.Error(c, http.StatusNotFound, MsgClientNotFound)
+		if errors.Is(err, ErrClientNotFound) {
+			httpx.Error(c, http.StatusNotFound, MsgClientNotFound)
+			return
+		}
+		httpx.Error(c, http.StatusInternalServerError, httpx.MsgInternalError)
 		return
 	}
 	httpx.Success(c, http.StatusOK, MsgClientFetched, client)
@@ -68,7 +72,7 @@ func (h *Handler) UpdateClient(c *gin.Context) {
 	clientID := c.Param("id")
 	var body UpdateClientRequest
 	if err := c.ShouldBindJSON(&body); err != nil {
-		httpx.Error(c, http.StatusBadRequest, httpx.MsgInvalidBody)
+		httpx.BindError(c, err)
 		return
 	}
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
@@ -76,7 +80,11 @@ func (h *Handler) UpdateClient(c *gin.Context) {
 
 	client, err := h.svc.UpdateClientService(ctx, clientID, &body)
 	if err != nil {
-		httpx.Error(c, http.StatusNotFound, MsgClientNotFound)
+		if errors.Is(err, ErrClientNotFound) {
+			httpx.Error(c, http.StatusNotFound, MsgClientNotFound)
+			return
+		}
+		httpx.Error(c, http.StatusInternalServerError, httpx.MsgInternalError)
 		return
 	}
 	httpx.Success(c, http.StatusOK, MsgClientUpdated, client)
@@ -88,7 +96,11 @@ func (h *Handler) DeleteClient(c *gin.Context) {
 	defer cancel()
 
 	if err := h.svc.DeleteClientByIDService(ctx, clientID); err != nil {
-		httpx.Error(c, http.StatusNotFound, MsgClientNotFound)
+		if errors.Is(err, ErrClientNotFound) {
+			httpx.Error(c, http.StatusNotFound, MsgClientNotFound)
+			return
+		}
+		httpx.Error(c, http.StatusInternalServerError, httpx.MsgInternalError)
 		return
 	}
 	httpx.Success(c, http.StatusOK, MsgClientDeleted, nil)

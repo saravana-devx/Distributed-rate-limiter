@@ -25,7 +25,7 @@ func (h *Handler) Check(c *gin.Context) {
 	cl := c.MustGet(middleware.ClientContextKey).(*client.Client)
 	var body CheckRequest
 	if err := c.ShouldBindJSON(&body); err != nil {
-		httpx.Error(c, http.StatusBadRequest, httpx.MsgInvalidBody)
+		httpx.BindError(c, err)
 		return
 	}
 
@@ -34,7 +34,7 @@ func (h *Handler) Check(c *gin.Context) {
 
 	data, err := h.svc.Check(ctx, cl, &body)
 	if err != nil {
-		httpx.Error(c, http.StatusNotAcceptable, "not accpetable")
+		httpx.Error(c, http.StatusInternalServerError, httpx.MsgInternalError)
 		return
 	}
 	// handle if allowed is false/true

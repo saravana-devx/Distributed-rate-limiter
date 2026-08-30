@@ -25,10 +25,6 @@ func NewService(repo ClientRepository, cache *redis.Redis) *Service {
 }
 
 func (s *Service) CreateClientService(ctx context.Context, req *CreateClientRequest) (*Client, error) {
-	existing, _ := s.repo.GetClientByID(ctx, req.ClientID)
-	if existing != nil {
-		return nil, ErrClientAlreadyExists
-	}
 	apiKey, err := generateAPIKey()
 	if err != nil {
 		return nil, err
